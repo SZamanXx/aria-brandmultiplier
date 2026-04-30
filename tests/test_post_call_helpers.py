@@ -93,5 +93,7 @@ def test_summary_from_profile_assembles_known_fields():
 
 def test_summary_handles_empty_profile():
     s = _summary_from_profile({}, {})
-    # Empty profile yields empty string — valid (caller flow handles None).
-    assert s == ""
+    # Empty profile yields a stub identity line — the narrative summary always
+    # produces SOMETHING so the opener prompt has a deterministic input.
+    assert "Unknown caller" in s
+    assert "role/company not captured" in s

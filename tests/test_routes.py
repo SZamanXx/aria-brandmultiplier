@@ -36,7 +36,7 @@ def test_twilio_voice_new_caller_registers_call(app_client):
         },
     )
     assert r.status_code == 200
-    assert "fake-ok" in r.text  # comes from our mocked register-call response
+    assert "conv_fake-ok" in r.text  # TwiML body from mocked register-call
     # New caller row should exist with call_count=0 (bump happens post-call).
     import asyncio
     caller = asyncio.run(get_caller("+15551112222"))

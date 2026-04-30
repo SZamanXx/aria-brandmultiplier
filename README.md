@@ -273,7 +273,7 @@ PYTHONPATH=. python scripts/configure_elevenlabs_webhook.py
 
 - **Live phone number:** *sent privately in the submission email — kept out of the public repo so the test line is not abused by anyone scraping the repo*
 - **Repository:** https://github.com/SZamanXx/aria-brandmultiplier
-- **Author:** Wojciech Szymański — `jatczakwojciech@gmail.com`
+- **Author:** Wojciech Szymański (GitHub: [@SZamanXx](https://github.com/SZamanXx)) — contact via the email I sent the submission from.
 
 ---
 

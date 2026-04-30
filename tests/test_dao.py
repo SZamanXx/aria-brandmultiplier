@@ -9,9 +9,9 @@ from aria.db.dao import normalize_e164, get_caller, upsert_caller, insert_conver
     "raw,expected",
     [
         ("+18005550100", "+18005550100"),
-        ("12676808419", "+18005550100"),
-        ("<the-twilio-number>", "+18005550100"),
-        ("  <the-twilio-number>  ", "+18005550100"),
+        ("18005550100", "+18005550100"),
+        ("+1 (800) 555-0100", "+18005550100"),
+        ("  +1 800 555 0100  ", "+18005550100"),
         ("", ""),
         (None, ""),  # defensive
     ],

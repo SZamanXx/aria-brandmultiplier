@@ -57,14 +57,22 @@ def app_client(monkeypatch):
     """
     from fastapi.testclient import TestClient
 
-    # Mock the ElevenLabs register-call HTTP call BEFORE importing the app
+    # Mock the ElevenLabs register-call HTTP call BEFORE importing the app.
+    # The route reads `r.text` (EL returns raw TwiML XML, not JSON), so the
+    # mock must serve TwiML on .text.
+    _FAKE_TWIML = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Response><Connect><Stream url="wss://api.elevenlabs.io/v1/convai/conversation">'
+        '<Parameter name="conversation_id" value="conv_fake-ok" />'
+        '</Stream></Connect></Response>'
+    )
+
     async def _fake_post(self, url, headers=None, json=None, **kwargs):  # noqa: ANN001
         class _R:
             status_code = 200
-            text = ""
+            text = _FAKE_TWIML
             def json(self_inner):
-                # Echo back a fake TwiML so the route returns 200.
-                return {"twiml": "<Response><Say>fake-ok</Say></Response>"}
+                return {}
         return _R()
 
     monkeypatch.setattr("httpx.AsyncClient.post", _fake_post)
