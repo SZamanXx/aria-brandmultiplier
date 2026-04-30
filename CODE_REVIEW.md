@@ -6,7 +6,7 @@ Cel review: przeczytać każdy plik, sprawdzić że Twilio + ElevenLabs + Anthro
 
 ## 1. Co aplikacja w ogóle robi (mental model)
 
-**MVP path A — phone.** Twilio number `+1 (267) 680-8419` → FastAPI webhook `/twilio/voice` → lookup w SQLite → (jeśli returning) Claude generuje opener → POST do ElevenLabs `register-call` z dynamic-variable overrides → ElevenLabs zwraca TwiML, ARIA prowadzi rozmowę → po końcu połączenia ElevenLabs uderza w `/elevenlabs/post-call` → Claude ekstrahuje strukturalne pola → deterministic merge do `callers.profile_json` → kolejny call zaczyna od openera o nim.
+**MVP path A — phone.** Twilio number `<the-twilio-number>` → FastAPI webhook `/twilio/voice` → lookup w SQLite → (jeśli returning) Claude generuje opener → POST do ElevenLabs `register-call` z dynamic-variable overrides → ElevenLabs zwraca TwiML, ARIA prowadzi rozmowę → po końcu połączenia ElevenLabs uderza w `/elevenlabs/post-call` → Claude ekstrahuje strukturalne pola → deterministic merge do `callers.profile_json` → kolejny call zaczyna od openera o nim.
 
 **Dwa transkrypty (defense-in-depth):** ElevenLabs robi STT live podczas rozmowy; równolegle Twilio nagrywa `.wav` → po zakończeniu rozmowy webhook `/twilio/recording-status` ściąga plik i przepuszcza przez **lokalny faster-whisper**. Oba transkrypty trafiają do Claude w extraction prompt. → **Status real:** patrz §3.4 — recording aktualnie nie działa, fallback na sam EL transcript działa.
 
@@ -25,7 +25,7 @@ Plus `_contradictions_log` jeśli Claude wykrył konflikt z poprzednim profilem.
 ### 2.1 Twilio
 ```
 ACCOUNT: "Test warsztat" | active | Full
-NUMBER: +12676808419 (sid PN94158c505212581599e358352c28072f)
+NUMBER: +18005550100 (sid PNxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx)
   voice_url: https://wit-liable-vegas-drivers.trycloudflare.com/twilio/voice
   voice_method: POST
   status_callback: None
@@ -33,7 +33,7 @@ NUMBER: +12676808419 (sid PN94158c505212581599e358352c28072f)
 ```
 ✅ Numer istnieje, voice-enabled, webhook ustawiony.
 ⚠️ `status_callback: None` na poziomie numeru — recording-status callback musi być ustawiony **w TwiML** albo na poziomie numeru. Aktualnie nie jest (patrz §3.4).
-🔴 **Tunnel hostname jest stary.** `.env` ma `PUBLIC_BASE_URL=` (puste), a Twilio woła `wit-liable-vegas-drivers.trycloudflare.com`. Ten tunel ŻYJE (200 na `/health`), ale **odpowiada `{"status":"ok","env":"dev"}` zamiast naszego `{"ok": true, "service":"aria", "model":...}`** — to znaczy że tunnel routuje do innego procesu (najpewniej V13 sms_dla_warsztat). Wszystkie inne paths zwracają 404. **Konsekwencja: jeśli teraz ktoś zadzwoni na +1 267 680 8419, połączenie pójdzie do złego serwisu i się wywali.** Fix przed submission: postawić tunel na port 8002 (gdzie ARIA), wpisać do `PUBLIC_BASE_URL`, przepuścić `python scripts/configure_twilio_number.py`.
+🔴 **Tunnel hostname jest stary.** `.env` ma `PUBLIC_BASE_URL=` (puste), a Twilio woła `wit-liable-vegas-drivers.trycloudflare.com`. Ten tunel ŻYJE (200 na `/health`), ale **odpowiada `{"status":"ok","env":"dev"}` zamiast naszego `{"ok": true, "service":"aria", "model":...}`** — to znaczy że tunnel routuje do innego procesu (najpewniej V13 sms_dla_warsztat). Wszystkie inne paths zwracają 404. **Konsekwencja: jeśli teraz ktoś zadzwoni na <the-twilio-number>, połączenie pójdzie do złego serwisu i się wywali.** Fix przed submission: postawić tunel na port 8002 (gdzie ARIA), wpisać do `PUBLIC_BASE_URL`, przepuścić `python scripts/configure_twilio_number.py`.
 
 ### 2.2 ElevenLabs Conversational AI
 ```
@@ -69,9 +69,14 @@ AVAILABLE MODELS: opus-4-7, sonnet-4-6, opus-4-6, opus-4-5, haiku-4-5,
 
 ## 3. Bugi i nieścisłości znalezione przy czytaniu
 
-### 3.1 🔴 (P0) Tunnel routuje do innego serwisu
-Opis powyżej §2.1. Bez tego całe path-A nie działa.
-**Fix:** start tunelu na 8002 → `PUBLIC_BASE_URL=https://<new>.trycloudflare.com` w `.env` → `python scripts/configure_twilio_number.py`. Verify: `curl https://<new>/health` zwraca `{"ok":true,"service":"aria","model":"claude-sonnet-4-5-20250929"}`.
+### 3.1 ✅ (resolved) Tunnel + Twilio webhook
+Pierwsze sprawdzenie pokazało stary tunel (`wit-liable-...`) routujący do innego serwisu. Drugi przebieg `verify_apis.py` (po podniesieniu nowego tunelu i `configure_twilio_number.py`) pokazał:
+```
+voice_url: https://reception-metropolitan-folders-amazing.trycloudflare.com/twilio/voice
+voice_url matches PUBLIC_BASE_URL
+tunnel serves ARIA (model: claude-sonnet-4-5-20250929)
+```
+Wszystko zielone. **Trzeba ten verify zrobić jeszcze raz tuż przed wysłaniem submission** — Cloudflare Tunnel quick-tunnels mają losowe hostnames, restart maszyny = nowy URL.
 
 ### 3.2 🟠 (P1) `twiml.py` to kod martwy / mylący
 `aria/twilio_helpers/twiml.py` zawiera `build_inbound_twiml()` który robi `<Record>` + `<Connect><ConversationRelay/>` — ale **nikt go nie importuje**. `twilio_voice.py` zwraca TwiML wygenerowany przez ElevenLabs `register-call` (które robi tylko `<Stream>`, bez recordingu).
@@ -141,7 +146,7 @@ Linia 81 `elevenlabs_post_call.py` mówi explicite "Cheap deterministic running 
 
 ## 5. Co dopisać przed submission (priorytety)
 
-1. 🔴 **Postaw tunel na port 8002, update `PUBLIC_BASE_URL`, run `configure_twilio_number.py`.** Bez tego `+1 267 680 8419` jest dead.
+1. 🔴 **Postaw tunel na port 8002, update `PUBLIC_BASE_URL`, run `configure_twilio_number.py`.** Bez tego `<the-twilio-number>` jest dead.
 2. 🟠 **Włącz account-level recording w Twilio Console** (albo świadomie wytnij Whisper z opisu). Inaczej README kłamie o dual-transcript.
 3. 🟡 Wpisz `ANTHROPIC_MODEL=claude-sonnet-4-5-20250929` do `.env.example` żeby się zgadzało z `.env`.
 4. 🟡 Przenieś `from fastapi import Response` na górę `twilio_recording.py`.
@@ -197,6 +202,6 @@ Nie testuję:
 [ ] Twilio Console: Account → Voice → "Record from start" włączone (jeśli chcemy whisper)
 [ ] python scripts/verify_apis.py — wszystko ZIELONE
 [ ] pytest tests/ -q — wszystko ZIELONE
-[ ] Zadzwoń sam na +1 267 680 8419 — krótka rozmowa, sprawdź /callers że wpis powstał, sprawdź że profile_json się zapełnił, rozłącz, zadzwoń ponownie i posłuchaj openera
+[ ] Zadzwoń sam na <the-twilio-number> — krótka rozmowa, sprawdź /callers że wpis powstał, sprawdź że profile_json się zapełnił, rozłącz, zadzwoń ponownie i posłuchaj openera
 [ ] git push, README submitted z linkiem
 ```

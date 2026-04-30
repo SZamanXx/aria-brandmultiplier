@@ -37,17 +37,21 @@ def load_twilio_creds() -> tuple[str, str]:
     return sid, token
 
 
-def search(client: Client, area_code: str | None = None, limit: int = 5):
+def search(client: Client, area_code: str | None = None, limit: int = 5, country: str = "US", kind: str = "local"):
     kwargs = {"voice_enabled": True, "limit": limit}
     if area_code:
         kwargs["area_code"] = area_code
-    nums = client.available_phone_numbers("US").local.list(**kwargs)
+    avail = client.available_phone_numbers(country)
+    pool = getattr(avail, kind)
+    nums = pool.list(**kwargs)
     if not nums:
-        print("No numbers available with those filters.")
+        print(f"No {country}/{kind} numbers available with those filters.")
         return []
-    print(f"\nFound {len(nums)} US local numbers:\n")
+    print(f"\nFound {len(nums)} {country} {kind} numbers:\n")
     for i, n in enumerate(nums, 1):
-        print(f"  {i}. {n.phone_number}  ({n.locality}, {n.region})  voice={n.capabilities.get('voice')}")
+        loc = getattr(n, "locality", "") or ""
+        reg = getattr(n, "region", "") or ""
+        print(f"  {i}. {n.phone_number}  ({loc}, {reg})  voice={n.capabilities.get('voice')}")
     print()
     return nums
 
@@ -68,17 +72,18 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--search", action="store_true", help="list candidate numbers, do NOT buy")
     p.add_argument("--buy", type=str, default=None, help="E.164 number to purchase")
-    p.add_argument("--area-code", type=str, default=None, help="optional 3-digit US area code filter")
+    p.add_argument("--area-code", type=str, default=None, help="optional area code filter")
+    p.add_argument("--country", type=str, default="US", help="ISO country code (US, PL, etc.)")
+    p.add_argument("--kind", type=str, default="local", help="local | mobile | tollFree")
     args = p.parse_args()
 
     sid, token = load_twilio_creds()
     client = Client(sid, token)
 
     if args.search:
-        search(client, area_code=args.area_code, limit=5)
+        search(client, area_code=args.area_code, limit=5, country=args.country, kind=args.kind)
     elif args.buy:
         buy(client, args.buy)
     else:
-        # default: list, then NOTHING. Explicit buy required.
-        search(client, area_code=args.area_code, limit=5)
+        search(client, area_code=args.area_code, limit=5, country=args.country, kind=args.kind)
         print("Re-run with --buy <number> to purchase.")

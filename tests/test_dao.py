@@ -8,10 +8,10 @@ from aria.db.dao import normalize_e164, get_caller, upsert_caller, insert_conver
 @pytest.mark.parametrize(
     "raw,expected",
     [
-        ("+12676808419", "+12676808419"),
-        ("12676808419", "+12676808419"),
-        ("+1 (267) 680-8419", "+12676808419"),
-        ("  +1 267 680 8419  ", "+12676808419"),
+        ("+18005550100", "+18005550100"),
+        ("12676808419", "+18005550100"),
+        ("<the-twilio-number>", "+18005550100"),
+        ("  <the-twilio-number>  ", "+18005550100"),
         ("", ""),
         (None, ""),  # defensive
     ],

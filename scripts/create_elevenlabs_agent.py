@@ -69,9 +69,15 @@ def main():
         },
         "asr": {
             "quality": "high",
+            # CRITICAL for Twilio: Twilio Media Streams send mu-law 8kHz audio.
+            # Default `pcm_16000` results in the agent hearing silence and the
+            # call dropping after a few seconds with no error message.
+            "user_input_audio_format": "ulaw_8000",
         },
         "turn": {
-            "turn_timeout": 10,
+            "turn_timeout": 7.0,
+            "mode": "turn",
+            "turn_eagerness": "normal",
         },
     }
 

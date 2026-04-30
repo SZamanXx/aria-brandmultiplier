@@ -100,12 +100,7 @@ async def twilio_voice(
             media_type="application/xml",
         )
 
-    data = r.json()
-    twiml = data.get("twiml") or data.get("TwiML") or ""
-    if not twiml:
-        logger.error("ElevenLabs register-call returned no TwiML: %s", data)
-        return Response(
-            content="<Response><Say>Sorry — agent not ready.</Say><Hangup/></Response>",
-            media_type="application/xml",
-        )
+    # ElevenLabs returns raw TwiML as the response body (Content-Type: application/xml).
+    twiml = r.text
+    logger.info("Returning TwiML for ARIA agent (CallSid=%s, returning=%s)", CallSid, is_returning)
     return Response(content=twiml, media_type="application/xml")

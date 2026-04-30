@@ -31,7 +31,7 @@ def test_twilio_voice_new_caller_registers_call(app_client):
         "/twilio/voice",
         data={
             "From": "+15551112222",
-            "To": "+12676808419",
+            "To": "+18005550100",
             "CallSid": "CAtest_new_1",
         },
     )
@@ -86,7 +86,7 @@ def test_twilio_voice_returning_caller_uses_opener(app_client):
         "/twilio/voice",
         data={
             "From": "+15551113333",
-            "To": "+12676808419",
+            "To": "+18005550100",
             "CallSid": "CAtest_ret_1",
         },
     )
@@ -136,7 +136,7 @@ def test_post_call_end_to_end_merges_profile(app_client, post_call_signed_reques
     # conversation row exists exactly the way it does in production.
     app_client.post(
         "/twilio/voice",
-        data={"From": "+15554440000", "To": "+12676808419", "CallSid": "CAfull_1"},
+        data={"From": "+15554440000", "To": "+18005550100", "CallSid": "CAfull_1"},
     )
 
     # Eliminate the 12s whisper-wait delay in tests by monkeypatching asyncio.sleep.
@@ -198,7 +198,7 @@ def test_returning_recognition_after_post_call(app_client, post_call_signed_requ
     # Call 1
     app_client.post(
         "/twilio/voice",
-        data={"From": "+15557778888", "To": "+12676808419", "CallSid": "CAr_1"},
+        data={"From": "+15557778888", "To": "+18005550100", "CallSid": "CAr_1"},
     )
 
     payload = {
@@ -238,7 +238,7 @@ def test_returning_recognition_after_post_call(app_client, post_call_signed_requ
 
     app_client.post(
         "/twilio/voice",
-        data={"From": "+15557778888", "To": "+12676808419", "CallSid": "CAr_2"},
+        data={"From": "+15557778888", "To": "+18005550100", "CallSid": "CAr_2"},
     )
     dyn = captured["json"]["conversation_initiation_client_data"]["dynamic_variables"]
     assert dyn["is_returning"] == "true"

@@ -2,7 +2,7 @@
 
 A voice agent that conducts structured intake calls over the phone and remembers every person it has ever spoken with. Built for the BrandMultiplier discovery test, deadline April 30, 2026 evening ET.
 
-**Live phone number:** `+1 (267) 680-8419` (US local, Philadelphia area)
+**Live phone number:** *(US local Twilio number — sent privately in the submission email; not committed to this public repo so the test line does not get hammered by random visitors)*
 **Path chosen:** A — phone (Twilio inbound)
 
 ---
@@ -213,6 +213,8 @@ What I would have done with the other 30 minutes I cut:
 
 I am writing those tradeoffs down here, not in code, on purpose. The brief said "what you choose to cut, and why." This is the why.
 
+**Update at minute 39 — second bug, more interesting one.** Second dial attempt: Twilio connected, my webhook returned the right TwiML, ElevenLabs even logged the conversation as "in-progress" — but it ended with `duration=0s, msg=0`. Caller heard a click and silence, then a hangup, no error message. Pulled the agent config and compared against my V13 production agent: `user_input_audio_format` was `pcm_16000` on ARIA, `ulaw_8000` on V13. Twilio Media Streams send mu-law 8 kHz audio — that is the telephony default. The agent was sitting there waiting for PCM 16 kHz audio that was never coming. PATCH'd it to `ulaw_8000` and updated `scripts/create_elevenlabs_agent.py` so the next agent created from scratch has the right defaults baked in. This is the kind of thing you only know if you've already run a production voice agent on Twilio + ElevenLabs — V13 had taught me this exact lesson, I just didn't apply it on the new agent at creation time. The fix took two minutes. Finding it took six.
+
 ## How I used AI tools
 
 Honest version:
@@ -267,7 +269,7 @@ PYTHONPATH=. python scripts/configure_elevenlabs_webhook.py
 
 ## Submission
 
-- **Live phone number:** **+1 (267) 680-8419** (US local Twilio, Philadelphia area code)
+- **Live phone number:** *sent privately in the submission email — kept out of the public repo so the test line is not abused by anyone scraping the repo*
 - **Repository:** https://github.com/SZamanXx/aria-brandmultiplier
 - **Author:** Wojciech Szymański — `jatczakwojciech@gmail.com`
 
