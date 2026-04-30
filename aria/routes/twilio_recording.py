@@ -15,7 +15,7 @@ import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
-from fastapi import APIRouter, BackgroundTasks, Form
+from fastapi import APIRouter, BackgroundTasks, Form, Response
 
 from aria.db.dao import update_conversation
 from aria.twilio_helpers.recording import download_recording
@@ -76,6 +76,3 @@ async def recording_complete():
     to keep Twilio happy.
     """
     return Response(content="<Response/>", media_type="application/xml")
-
-
-from fastapi import Response  # noqa: E402  (kept at bottom to avoid circular import edge-case)

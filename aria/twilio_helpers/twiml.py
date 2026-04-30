@@ -1,15 +1,13 @@
 """
-TwiML builders.
+DEPRECATED — kept for reference only.
 
-Inbound voice flow:
-  1. Twilio POSTs to /twilio/voice
-  2. We respond with <Connect><ConversationRelay /> pointing at the
-     ElevenLabs Conv AI WebSocket so all audio is routed there.
-  3. We also start a parallel <Record> on the call so we get a .wav for
-     local Whisper to chew on after the call ends.
+This module was the original hand-rolled TwiML builder for the inbound voice
+flow. It has been REPLACED by `aria/routes/twilio_voice.py` which calls
+ElevenLabs's `register-call` endpoint and uses the TwiML that ElevenLabs
+returns directly. That path is simpler and the dynamic-variable override
+mechanism is the supported one.
 
-ElevenLabs uses Twilio's "ConversationRelay" verb — we provide the agent ID
-and the dynamic-variable overrides.
+Nothing imports from here anymore. Remove on next pass.
 """
 
 from __future__ import annotations
