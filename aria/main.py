@@ -9,7 +9,7 @@ from fastapi import FastAPI
 
 from aria.config import settings
 from aria.db.init_db import init_db
-from aria.routes import health, twilio_voice, twilio_recording, elevenlabs_post_call
+from aria.routes import health, twilio_voice, twilio_recording, twilio_status, elevenlabs_post_call
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,4 +30,5 @@ app = FastAPI(title="ARIA", version="0.1.0", lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(twilio_voice.router)
 app.include_router(twilio_recording.router)
+app.include_router(twilio_status.router)
 app.include_router(elevenlabs_post_call.router)

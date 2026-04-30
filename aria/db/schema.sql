@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS callers (
 );
 
 CREATE TABLE IF NOT EXISTS conversations (
-    conversation_id              TEXT PRIMARY KEY,    -- ElevenLabs conv_id or Twilio CallSid fallback
+    conversation_id              TEXT PRIMARY KEY,    -- Twilio CallSid (our key)
+    el_conversation_id           TEXT,                -- ElevenLabs conv_id (parsed from register-call TwiML)
     phone_e164                   TEXT NOT NULL,
     started_at                   TEXT NOT NULL,
     duration_seconds             INTEGER,

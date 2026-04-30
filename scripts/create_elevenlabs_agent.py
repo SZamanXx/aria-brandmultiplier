@@ -66,6 +66,10 @@ def main():
         "tts": {
             "model_id": "eleven_turbo_v2",
             "voice_id": voice_id,
+            # CRITICAL for Twilio: TTS output must be mu-law 8kHz too — Twilio's
+            # Media Streams expect ulaw_8000 in BOTH directions. Default is
+            # pcm_16000 which Twilio cannot decode, and the call drops silently.
+            "agent_output_audio_format": "ulaw_8000",
         },
         "asr": {
             "quality": "high",

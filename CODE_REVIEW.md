@@ -24,7 +24,7 @@ Plus `_contradictions_log` jeśli Claude wykrył konflikt z poprzednim profilem.
 
 ### 2.1 Twilio
 ```
-ACCOUNT: "Test warsztat" | active | Full
+ACCOUNT: "my dev account" | active | Full
 NUMBER: +18005550100 (sid PNxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx)
   voice_url: https://wit-liable-vegas-drivers.trycloudflare.com/twilio/voice
   voice_method: POST
@@ -33,7 +33,7 @@ NUMBER: +18005550100 (sid PNxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx)
 ```
 ✅ Numer istnieje, voice-enabled, webhook ustawiony.
 ⚠️ `status_callback: None` na poziomie numeru — recording-status callback musi być ustawiony **w TwiML** albo na poziomie numeru. Aktualnie nie jest (patrz §3.4).
-🔴 **Tunnel hostname jest stary.** `.env` ma `PUBLIC_BASE_URL=` (puste), a Twilio woła `wit-liable-vegas-drivers.trycloudflare.com`. Ten tunel ŻYJE (200 na `/health`), ale **odpowiada `{"status":"ok","env":"dev"}` zamiast naszego `{"ok": true, "service":"aria", "model":...}`** — to znaczy że tunnel routuje do innego procesu (najpewniej V13 sms_dla_warsztat). Wszystkie inne paths zwracają 404. **Konsekwencja: jeśli teraz ktoś zadzwoni na <the-twilio-number>, połączenie pójdzie do złego serwisu i się wywali.** Fix przed submission: postawić tunel na port 8002 (gdzie ARIA), wpisać do `PUBLIC_BASE_URL`, przepuścić `python scripts/configure_twilio_number.py`.
+🔴 **Tunnel hostname jest stary.** `.env` ma `PUBLIC_BASE_URL=` (puste), a Twilio woła `wit-liable-vegas-drivers.trycloudflare.com`. Ten tunel ŻYJE (200 na `/health`), ale **odpowiada `{"status":"ok","env":"dev"}` zamiast naszego `{"ok": true, "service":"aria", "model":...}`** — to znaczy że tunnel routuje do innego procesu (najpewniej a different process on this machine). Wszystkie inne paths zwracają 404. **Konsekwencja: jeśli teraz ktoś zadzwoni na <the-twilio-number>, połączenie pójdzie do złego serwisu i się wywali.** Fix przed submission: postawić tunel na port 8002 (gdzie ARIA), wpisać do `PUBLIC_BASE_URL`, przepuścić `python scripts/configure_twilio_number.py`.
 
 ### 2.2 ElevenLabs Conversational AI
 ```

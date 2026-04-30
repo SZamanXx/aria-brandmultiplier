@@ -80,36 +80,50 @@ def _flatten_elevenlabs_transcript(turns: list) -> str:
 
 def _summary_from_profile(profile: dict, last_extraction: dict) -> str:
     """
-    Cheap deterministic running summary. Two short paragraphs constructed from
-    the profile + the latest call's free_text_summary. Good enough for the
-    opener prompt to consume on the next call. The opener prompt is what makes
-    it sound like a human said it.
+    Narrative running summary. Reads like reviewer notes a human can scan
+    quickly to know who this caller is and what happened on the last call.
+    Each section ends with a period and a newline; readability beats density.
     """
-    name = profile.get("name") or "this caller"
+    name = profile.get("name") or "Unknown caller"
     role = profile.get("current_role") or ""
     company = profile.get("company") or ""
     built = profile.get("what_they_built") or ""
     result = profile.get("biggest_client_result") or ""
     works_with = profile.get("who_they_typically_work_with") or ""
-    clients = ", ".join(profile.get("example_clients") or [])
-    verticals = ", ".join(profile.get("verticals") or [])
+    clients = profile.get("example_clients") or []
+    verticals = profile.get("verticals") or []
+    tone = profile.get("tone_notes") or []
 
-    bits: list[str] = []
-    if role or company:
-        bits.append(f"{name} — {role}{' at ' + company if company else ''}.".strip())
+    parts: list[str] = []
+
+    # Identity paragraph
+    ident_bits = [f"**{name}**"]
+    if role and company:
+        ident_bits.append(f"is {role.rstrip('.')} at {company}.")
+    elif role:
+        ident_bits.append(f"— {role.rstrip('.')}.")
+    elif company:
+        ident_bits.append(f"— at {company}.")
+    else:
+        ident_bits.append("— (role/company not captured yet).")
+    parts.append(" ".join(ident_bits))
+
     if built:
-        bits.append(f"What they've built: {built}")
+        parts.append(f"**What they've built:** {built}")
     if result:
-        bits.append(f"Biggest client result they've shared: {result}")
+        parts.append(f"**Biggest client result they shared:** {result}")
     if works_with:
-        bits.append(f"Typically works with: {works_with}")
+        parts.append(f"**Typical customer:** {works_with}")
     if clients:
-        bits.append(f"Example clients mentioned: {clients}")
+        parts.append(f"**Example clients mentioned across calls:** {', '.join(clients)}.")
     if verticals:
-        bits.append(f"Verticals: {verticals}")
+        parts.append(f"**Verticals:** {', '.join(verticals)}.")
+    if tone:
+        parts.append(f"**Tone / how they came across:** {'; '.join(tone)}.")
     if last_extraction.get("free_text_summary"):
-        bits.append(f"Last call: {last_extraction['free_text_summary']}")
-    return "\n".join(bits)
+        parts.append(f"**Last call notes:** {last_extraction['free_text_summary']}")
+
+    return "\n\n".join(parts)
 
 
 @router.post("/elevenlabs/post-call")

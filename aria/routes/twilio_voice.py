@@ -64,6 +64,12 @@ async def twilio_voice(
         is_returning_caller=is_returning,
     )
 
+    # Payload structure: dynamic_variables only — no conversation_config_override
+    # (override on first_message causes the WebSocket to accept the call and
+    # abort within ~2 s). The agent's `first_message` is configured to the
+    # template "{{opener}}" — ElevenLabs substitutes from dynamic_variables.opener
+    # at conversation-start time, so we control the opener purely via the
+    # variable value.
     payload = {
         "agent_id": settings.elevenlabs_agent_id,
         "from_number": caller_phone,
@@ -75,11 +81,6 @@ async def twilio_voice(
                 "is_returning": "true" if is_returning else "false",
                 "opener": opener,
                 "returning_summary": returning_summary,
-            },
-            "conversation_config_override": {
-                "agent": {
-                    "first_message": opener,
-                },
             },
         },
     }
@@ -101,6 +102,15 @@ async def twilio_voice(
         )
 
     # ElevenLabs returns raw TwiML as the response body (Content-Type: application/xml).
+    # The TwiML contains <Parameter name="conversation_id" value="conv_..." /> — we parse
+    # it out and store the mapping CallSid → EL conversation_id so the post-call status
+    # webhook can fetch the transcript by id without needing EL's own webhook.
     twiml = r.text
-    logger.info("Returning TwiML for ARIA agent (CallSid=%s, returning=%s)", CallSid, is_returning)
+    import re
+    m = re.search(r'name="conversation_id"\s+value="([^"]+)"', twiml)
+    el_conv_id = m.group(1) if m else None
+    if el_conv_id:
+        from aria.db.dao import update_conversation
+        await update_conversation(CallSid, el_conversation_id=el_conv_id)
+    logger.info("Returning TwiML for ARIA agent (CallSid=%s, el_conv=%s, returning=%s)", CallSid, el_conv_id, is_returning)
     return Response(content=twiml, media_type="application/xml")

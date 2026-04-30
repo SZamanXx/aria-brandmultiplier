@@ -63,11 +63,15 @@ Output a single JSON object with this exact shape:
 
 Field-specific rules:
   - "name"  : only return if this call introduced or corrected the name. Otherwise null.
-  - "example_clients" / "verticals" / "tone_notes" : return only entries NEW since existing_profile, not the union.
-  - "free_text_summary" : ALWAYS return a 2-4 sentence narrative covering THIS call only, even if no new structured data was extracted. The summary is what the merge layer uses to keep the running summary fresh.
+  - "current_role" / "company" : write **1–2 sentences**, not just a label. Bad: "Head of AI". Good: "Head of AI & Engineering at BrandMultiplier; runs the AI platform team and reports to the CEO." If you only have the title with no context, the title alone is fine.
+  - "what_they_built" : **2–3 sentences** describing what they built and (if mentioned) why it matters or who it's for. Capture vivid phrasing. Bad: "A multi-agent system." Good: "Zeebo, a multi-agent orchestration system he built solo for content production. He referenced it as one of several small applications he ships independently."
+  - "biggest_client_result" : **2–3 sentences** with the result, the client/situation, and any quantifiable detail. Bad: "5x ARR." Good: "Took a SaaS founder from $1M to $5M ARR over nine months by re-architecting their funnel after the BrandMultiplier methodology — the kind of result he says he'd put on a billboard."
+  - "who_they_typically_work_with" : **2 sentences** describing the ICP with texture. Bad: "Founders." Good: "Founder-led B2B companies in the $3M-$50M ARR range, post product-market-fit but pre-scaling. Tends to light up working with technical founders specifically."
+  - "example_clients" / "verticals" / "tone_notes" : return only entries NEW since existing_profile, not the union. Tone notes can be **a short phrase** ("concise, metaphor-heavy", "tested by hanging up early to check memory recall"). These are how *they* came across, not what they said.
+  - "free_text_summary" : **3–5 sentences** narrative of THIS call. Mention what THE CALLER said, what ARIA picked up on, and how the call ended (engaged / cut short / wrap-up). Reads like a reviewer's note that future-me can scan in five seconds. Think: 'who did what'. Bad (too short, no agent action): "He talked about Zeebo." Good: "Wojtek picked up immediately and introduced himself by first name. ARIA pivoted into the day-to-day question; he gave Zeebo as his current build — a multi-agent system — and ARIA reflected it back. He then hung up deliberately to test memory recall, suggesting he was evaluating ARIA rather than being interviewed earnestly."
   - "_contradictions" : empty list if none. Each entry must be a contradiction with existing_profile, not internal disagreement between the two transcripts.
 
-Capture the caller's phrasing where it's vivid; do not paraphrase into corporate-speak. If they said something specific and quotable, keep it specific and quotable.
+Capture the caller's phrasing where it's vivid; do not paraphrase into corporate-speak. If they said something specific and quotable, keep it specific and quotable. **Length matters — sparse one-word fields are not useful for the human reading these later.**
 
 Output only the JSON object, no prose, no markdown fences."""
 
