@@ -2,8 +2,10 @@
 
 A voice agent that conducts structured intake calls over the phone and remembers every person it has ever spoken with. Built for the BrandMultiplier discovery test, deadline April 30, 2026 evening ET.
 
-**Live phone number:** *(US local Twilio number — sent privately in the submission email; not committed to this public repo so the test line does not get hammered by random visitors)*
+**Live phone number:** *sent privately in the submission email — kept out of this public repo so the test line does not get scraped and hammered.*
 **Path chosen:** A — phone (Twilio inbound)
+
+> **Post-clock README cleanup.** A few commits land on this file after my 1h01 finish — strictly README hygiene, **not code**. The system that was working at minute 61 is the system that is working now. The trigger was that I had left the live test phone number visible in the "Notes for the reviewer" section, which on a public repo is a spam vector waiting to happen. Once I was in the file fixing that, I caught a handful of small accuracy drifts that were embarrassing me on a re-read — the voice claim (I had originally wired up my own cloned voice as an Easter egg but swapped it for a stock English voice mid-build because the clone wasn't fine-tuned for the `eleven_turbo_v2` + `ulaw_8000` combo telephony needs, and I never updated the prose), the port number (text said 8042, the live process is on 8043), and a stray "ngrok" where I meant "cloudflared." Calling these out explicitly so the commit timestamps after 21:26 do not make anyone wonder what I actually changed.
 
 ---
 
@@ -15,7 +17,7 @@ The moment I finished reading the brief, the architecture was already drawn in m
 
 When a new call lands, the Twilio webhook does one thing before forwarding the audio to ElevenLabs: it looks up the caller's E.164 number in my SQLite. Returning caller? Claude is asked, in real time, to produce a single opener line from the merged profile — "Hey Sapir, last time you walked me through the BrandMultiplier methodology and the founder-extraction calls. Anything new since then, or should we go deeper on the referral side?" — and that line is injected into the ElevenLabs agent via a dynamic variable override. No re-introduction. No starting over. That is the demo.
 
-**Two transcripts, not one.** The brief technically only requires the conversation be stored — but the moment ElevenLabs is in the path, my transcript depends on a vendor's STT being correct on a noisy call. So the call is also recorded by Twilio, the recording is downloaded server-side, and a **local Whisper** instance on my machine transcribes it independently. Both transcripts go to Claude for extraction. Disagreements between them surface in extracted fields with lower confidence. Vendor lock-in is one of the things you pay senior engineers to avoid in week one — building it in from the start is cheaper than ripping it out later.
+**Two transcripts, in design.** The brief technically only requires the conversation be stored — but the moment ElevenLabs is in the path, my transcript depends on a vendor's STT being correct on a noisy call. So the architecture has two transcripts: ElevenLabs's, and a local **faster-whisper** pass on a Twilio recording of the same audio. Both feed Claude's extraction prompt; disagreements surface as lower-confidence fields. Vendor lock-in is one of the things you pay senior engineers to avoid in week one — building the second transcript in from the start is cheaper than ripping it out later. *(Disclosure on what shipped vs what was wired below.)*
 
 > **Honest disclosure before you read further.** The Whisper pipeline is fully wired in code — `aria/whisper_local/transcribe.py`, the recording handler at `aria/routes/twilio_recording.py`, the twelve-second wait inside `aria/routes/elevenlabs_post_call.py`. In practice on this submission, it **does not actually fire on real calls** — I never enabled call recording at the Twilio number level, so the `recording-status` webhook never gets called and the `.wav` never lands. Closing that loop is one of: (a) a TwiML wrapper that runs `<Record>` before connecting to ElevenLabs, or (b) toggling "Record from start" in the Twilio Console under Voice settings. Neither is in the codebase. I went one minute over my self-imposed 60-minute budget already (clock in this README is 1h01, not 1h00 — that's the truth), and I decided not to keep changing code past that line. Leaving the gap visible felt more honest than monkey-patching it once the clock had run out. So the production reality of this submission: ARIA runs on **one transcript** (ElevenLabs), and the dual-transcript architecture is a small wire-up away, not built today. This was the most genuinely fun coding session I've had this week, and I'd rather own the missing minute than fake the gap.
 
@@ -40,7 +42,7 @@ Worth being explicit, because the obvious worry with a stack like this is "are y
 
 - **Inside the call (latency-critical, hundreds of milliseconds):** the audio path is **Twilio ↔ ElevenLabs Conversational AI**. End-to-end. ElevenLabs does the STT, the LLM (configured to be Claude under the hood), the turn-taking, and the TTS, all in their pipeline. My code is not in this path.
 - **At call start (one Claude call, 4-second timeout, falls back to a safe generic line):** for returning callers I ask Claude to write the opening sentence from the merged profile. This runs in parallel with Twilio connecting to ElevenLabs. Worst case the caller hears the fallback opener — ARIA still recognizes them on subsequent turns because the dynamic-variable overrides are still set.
-- **After the call hangs up (not latency-critical at all):** Twilio's recording webhook fires → I download the WAV → local Whisper produces a backup transcript → ElevenLabs's post-call webhook fires with their transcript → both go to Claude API for structured extraction → merge into the caller profile in SQLite.
+- **After the call hangs up (not latency-critical at all):** my `/twilio/status` endpoint receives the call-completed webhook → polls ElevenLabs for the conversation transcript by id → runs Claude extraction → merges into the caller profile in SQLite. ElevenLabs's own post-call webhook is also wired (with HMAC verification) as a redundant path. The Whisper-on-Twilio-recording branch is wired in code but **does not fire on this submission** — see the disclosure earlier.
 
 So Claude API is at the boundaries, not in the audio. The conversation runs at whatever ElevenLabs can do — typically sub-second turn-around. Confirming this explicitly because it is the thing I would push back on if I were reading someone else's design.
 
@@ -55,36 +57,37 @@ So Claude API is at the boundaries, not in the audio. The conversation runs at w
                               │  3. if known →                   │
                               │     Claude writes opener line    │
                               │     from accumulated profile     │
-                              │  4. return TwiML:                │
-                              │     <Start><Stream> → ElevenLabs │
-                              │     <Record dual-channel>        │
-                              └────────┬─────────────┬───────────┘
-                                       │             │
-                                       ▼             ▼
+                              │  4. return TwiML from EL         │
+                              │     register-call:               │
+                              │     <Connect><Stream> → EL ws    │
+                              └────────┬─────────────────────────┘
+                                       │
+                                       ▼                          (wired but
                        ┌─────────────────────┐   ┌────────────────────┐
                        │  ElevenLabs Conv AI │   │  Twilio recording  │
-                       │  (live audio path)  │   │  (parallel, .wav)  │
-                       │                     │   │                    │
-                       │  - STT              │   │  Independent of    │
-                       │  - Claude as LLM    │   │  ElevenLabs path.  │
-                       │  - TTS              │   │  Survives if EL    │
-                       │  - turn-taking      │   │  vendor changes.   │
+                       │  (live audio path)  │   │  branch (NOT       │
+                       │                     │   │  enabled in this   │
+                       │  - STT              │   │  submission —      │
+                       │  - Claude as LLM    │   │  see disclosure)   │
+                       │  - TTS              │   │                    │
+                       │  - turn-taking      │   │  Wire-up away:     │
+                       │                     │   │  download .wav →   │
+                       │                     │   │  faster-whisper →  │
+                       │                     │   │  second transcript │
                        └──────────┬──────────┘   └─────────┬──────────┘
-                                  │ post-call              │ recording-status
+                                  │ call ends              │
                                   ▼                        ▼
-                       ┌─────────────────────┐   ┌────────────────────┐
-                       │ /elevenlabs/post-   │   │ /twilio/recording  │
-                       │  call               │   │                    │
-                       │                     │   │ Download .wav →    │
-                       │ ElevenLabs          │   │ run local Whisper  │
-                       │ transcript saved    │   │ (faster-whisper)   │
-                       └──────────┬──────────┘   └─────────┬──────────┘
-                                  │                        │
-                                  └──────────┬─────────────┘
-                                             ▼
+                       ┌─────────────────────────────┐    (would feed
+                       │ /twilio/status (primary):   │    into extraction)
+                       │  poll EL conv by id, fetch  │
+                       │  transcript on completion   │
+                       │ /elevenlabs/post-call:      │
+                       │  redundant, HMAC-verified   │
+                       └──────────────┬──────────────┘
+                                      ▼
                               ┌──────────────────────────────────┐
                               │  Claude API extraction & merge   │
-                              │  (sees BOTH transcripts)         │
+                              │  (today: EL transcript only)     │
                               │                                  │
                               │  Per-call extracted fields:      │
                               │   - name                         │
@@ -157,15 +160,15 @@ I run Postgres in production every day. I am not standing it up for a one-evenin
 
 A VPS deploy would have been a stronger production signal, but the brief says "live and accessible — localhost is not a submission" and a tunnel satisfies that requirement. I spent the hour I would have spent on Docker-on-Hetzner on the merge-memory layer instead, because that is the part being evaluated.
 
-Server runs on **port 8042**. I went looking for an unused port deliberately — port 8000 was busy on my machine (an ngrok pointed at another project), and when I tried 8002 cloudflared resolved `localhost` → IPv6 first and hit a different IPv6 service on the same port. I scanned 8001-9090 to find a port that was free on both IPv4 and IPv6, picked 8042. That kind of debug is not what I want to spend cycles on at minute 27 of a 60-minute timer — but the lesson is worth carrying: when a tunnel goes to "the wrong app," check IPv6 vs IPv4 binding before anything else.
+Server runs on **port 8043**. I went looking for an unused port deliberately — port 8000 was busy on my machine (an ngrok pointed at another project), and when I tried 8002 cloudflared resolved `localhost` → IPv6 first and hit a different IPv6 service on the same port. I scanned 8001-9090 to find one that was free on both IPv4 and IPv6 (8042 was first picked, 8043 ended up as the live one after a clean restart). That kind of debug is not what I want to spend cycles on at minute 27 of a 60-minute timer — but the lesson is worth carrying: when a tunnel goes to "the wrong app," check IPv6 vs IPv4 binding before anything else.
 
 **6. Inbound only. No outbound. No SMS. No agent provisioning.**
 
 All of those exist in my AI Voice Secretary work. None of them are in scope here. They would only blur the demo.
 
-**7. ARIA speaks in my own cloned voice.**
+**7. Voice: stock English, with a partial-Easter-egg story.**
 
-Small Easter egg. I keep a clone of my own voice on ElevenLabs because I use it for content I post on social — so spinning up ARIA with that voice was free, and it gives you a chance to hear what I sound like before we ever get on a call. The voice ID is hard-coded in `scripts/create_elevenlabs_agent.py` and easy to swap (`ELEVENLABS_VOICE_ID` env var, or one of their stock voices). Pure flourish, zero functional reason — but a flourish that costs nothing is still a flourish.
+I had originally wired ARIA to my own cloned voice — I keep one on ElevenLabs because I use it for content I post on social, so the Easter egg was free. It didn't ship that way. The clone was fine-tuned for ElevenLabs's multilingual models (`eleven_turbo_v2_5`, `eleven_v2_5_flash`), and the agent for telephony has to run on `eleven_turbo_v2` (English-only, the model that pairs cleanly with `ulaw_8000` audio). The clone wasn't fine-tuned for that model, so it produced silence on the wire — calls connected and immediately died. I swapped to a stock English voice (Sarah, `EXAVITQu4vr4xnSDxMaL`) and the call audio came through. The voice you'll hear when you dial is Sarah, not me. Fine-tuning the clone for the right model is a one-button job in the ElevenLabs dashboard with more time; the swap cost me nothing and the lesson on telephony-format constraints is worth more than the flourish.
 
 ---
 
@@ -204,7 +207,7 @@ What that 60-minute budget actually paid for, in order:
 3. Context7 MCP pulling fresh ElevenLabs Conversational AI and Anthropic SDK docs in one window. A separate sequential-thinking session in another window pressure-testing the "feels like a person, not a checklist" requirement.
 4. The merge function before anything else. Unit-tested with two synthetic calls before a single line of voice plumbing was written. If the merge layer is wrong the whole product is wrong; everything else is wires.
 5. Twilio number purchased programmatically (script in `scripts/buy_twilio_number.py`), not clicked through a console.
-6. Wiring — webhooks, recording handler, ElevenLabs agent creation, ngrok tunnel.
+6. Wiring — webhooks, recording handler, ElevenLabs agent creation, cloudflared tunnel.
 
 What I would have done with the other 30 minutes I cut:
 
@@ -217,7 +220,7 @@ I am writing those tradeoffs down here, not in code, on purpose. The brief said 
 
 **Working app, end-to-end, in exactly 1 hour and 1 minute.** Started 20:25 CET, dialed in for the first successful round-trip (returning-caller recognition with merged profile + Claude-generated opener) at 21:26 CET. One real bug exposed that wouldn't have surfaced without a live phone test — Twilio Media Streams use mu-law 8 kHz audio in BOTH directions, and my agent's `agent_output_audio_format` was sitting at the SDK default `pcm_16000` for the TTS side. The call connected, ElevenLabs accepted the WebSocket, and then nothing happened — the audio frames were the wrong format for telephony. Fixed via API patch (script updated to bake the right defaults at agent creation time). The lesson is one I had run into on a previous voice agent of mine; I just didn't apply it from minute one on the new one.
 
-This stage took longer than I expected — the audio-format bug ate real time, as did sorting out which dynamic-variable mechanism actually substitutes into `first_message` versus which one looks accepted but silently kills the WebSocket. But I had set myself a flat one-hour budget when I started, and a challenge is a challenge — I'm not going to cheat past it just because the last 10 minutes were debugging. Hand on heart: with more time the next three things I would harden are (1) the **returning-caller conversation model** — right now the opener line is good and the system prompt instructs ARIA to target missing-coverage topics, but I haven't dialed in how aggressively to deepen vs. how breezily to ask "what's new"; that's a feel I'd tune across 10–20 real returning calls, not from the chair, (2) **further humanization of the agent**, especially the second-call register where the caller has already done the formal intake — ARIA should sound more like a friend who remembers and less like an interviewer doing a follow-up survey, and (3) the **local Whisper backup STT** — the pipeline is wired (the recording-status webhook downloads the .wav and runs `faster-whisper` on it, second transcript goes into Claude's extraction prompt alongside the ElevenLabs one), but I did not stress-test it under real telephony noise/accents and I did not tune confidence reconciliation when the two transcripts disagree. The architectural bones are there; the polish isn't. All three are prompt-and-eval work, not architecture work.
+This stage took longer than I expected — the audio-format bug ate real time, as did sorting out which dynamic-variable mechanism actually substitutes into `first_message` versus which one looks accepted but silently kills the WebSocket. But I had set myself a flat one-hour budget when I started, and a challenge is a challenge — I'm not going to cheat past it just because the last 10 minutes were debugging. Hand on heart: with more time the next three things I would harden are (1) the **returning-caller conversation model** — right now the opener line is good and the system prompt instructs ARIA to target missing-coverage topics, but I haven't dialed in how aggressively to deepen vs. how breezily to ask "what's new"; that's a feel I'd tune across 10–20 real returning calls, not from the chair, (2) **further humanization of the agent**, especially the second-call register where the caller has already done the formal intake — ARIA should sound more like a friend who remembers and less like an interviewer doing a follow-up survey, and (3) the **local Whisper backup STT** — the pipeline is wired in code (recording handler, faster-whisper, the wait-for-second-transcript dance in the post-call route) but it does not actually fire on this submission, because Twilio call recording is not enabled on the number; closing that loop is either a TwiML wrapper or a Console toggle (covered candidly in the disclosure at the top). The architectural bones are there; the trigger isn't. All three are prompt-and-config work, not architecture work.
 
 ## How I used AI tools
 
@@ -234,8 +237,8 @@ Honest version:
 ## Run it locally
 
 ```bash
-git clone https://github.com/<wojciech>/head_AI_task
-cd head_AI_task
+git clone https://github.com/SZamanXx/aria-brandmultiplier
+cd aria-brandmultiplier
 
 python -m venv venv
 source venv/bin/activate            # Windows: venv\Scripts\activate
@@ -243,23 +246,25 @@ pip install -r requirements.txt
 
 cp .env.example .env
 # fill in TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER,
-#         ELEVENLABS_API_KEY, ELEVENLABS_WEBHOOK_SECRET, ANTHROPIC_API_KEY
+#         ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID, ELEVENLABS_WEBHOOK_SECRET,
+#         ANTHROPIC_API_KEY, ANTHROPIC_MODEL
 
 # 1. init the database
 PYTHONPATH=. python -m aria.db.init_db
 
-# 2. (optional, one-time) buy a fresh US Twilio number
-PYTHONPATH=. python scripts/buy_twilio_number.py --search
-PYTHONPATH=. python scripts/buy_twilio_number.py --buy +1XXXXXXXXXX
+# 2. (optional, one-time) buy a Twilio number — country-flexible
+PYTHONPATH=. python scripts/buy_twilio_number.py --search                       # default: US local
+PYTHONPATH=. python scripts/buy_twilio_number.py --search --country PL --kind mobile
+PYTHONPATH=. python scripts/buy_twilio_number.py --buy +XXXXXXXXXXX [--address-sid AD... --bundle-sid BU...]
 
 # 3. (optional, one-time) create the ElevenLabs ARIA agent
 PYTHONPATH=. python scripts/create_elevenlabs_agent.py
 
 # 4. start the server
-PYTHONPATH=. uvicorn aria.main:app --host 127.0.0.1 --port 8042
+PYTHONPATH=. uvicorn aria.main:app --host 127.0.0.1 --port 8043
 
 # 5. expose it (in another terminal)
-cloudflared tunnel --url http://127.0.0.1:8042
+cloudflared tunnel --url http://127.0.0.1:8043
 # copy the trycloudflare.com URL into PUBLIC_BASE_URL in .env
 
 # 6. point Twilio + ElevenLabs at that URL
@@ -284,6 +289,6 @@ PYTHONPATH=. python scripts/configure_elevenlabs_webhook.py
 - The two prompts I am proudest of are `aria/prompts/extract_call.py` (post-call structured extraction with merge contract and contradiction flagging) and `aria/prompts/returning_opener.py` (returning-caller first line — one specific reference, never numbers or client names because that reads like surveillance, open question to hand the floor back).
 - The merge function is in `aria/memory/merge.py`. Read it cold — that is the architectural difference between "ARIA" and "ARIA shaped like AI Voice Secretary." If you want me to walk through it on a call I am happy to.
 - The in-call agent system prompt was designed against a separate research document (`HUMANIZATION_RESEARCH.md` at the repo root), not vibes. The patches labelled A/B/C/D in that doc are exactly what is in `aria/prompts/agent_system.py` — speech patterns, reflection-before-question with verbatim examples, repair phrases, runtime config (max_tokens=120, temperature=0.7, balanced interruption sensitivity).
-- The voice you'll hear is mine — see "**7. ARIA speaks in my own cloned voice**" above. Easter egg. Easy to swap.
-- Phone-number lookup is keyed off Twilio's `From=` form parameter on the inbound webhook. Same pattern as my AI Voice Secretary. No clever extraction needed — Twilio gives it to us in E.164 already.
-- I tested by calling +1 (267) 680-8419 from my own number, twice in a row. The second call opens with the merged-profile opener and does not re-introduce. That is the requirement; I want to be specific that it is working before I submitted.
+- The voice you'll hear is the stock ElevenLabs "Sarah" English voice. Honest story behind why it isn't my own clone is in **Key decision #7** above.
+- Phone-number lookup is keyed off Twilio's `From=` form parameter on the inbound webhook. No clever extraction needed — Twilio gives it to us in E.164 already.
+- I tested by calling the live number from my own phone, twice in a row. The second call opens with the merged-profile opener and does not re-introduce. That is the brief's requirement; I want to be specific that it is working before I submitted.
