@@ -37,10 +37,15 @@ def main():
 
     client = ElevenLabs(api_key=settings.elevenlabs_api_key)
 
-    voice_id = os.getenv("ELEVENLABS_VOICE_ID") or WOJCIECH_CLONE_VOICE_ID
+    # Default voice = stock English voice (Sarah, EXAVITQu4vr4xnSDxMaL).
+    # Override with ELEVENLABS_VOICE_ID env var for the cloned-voice Easter egg
+    # — but note that voice clones must be fine-tuned for the model+format you
+    # use here, otherwise the call connects and audio is silent.
+    voice_id = os.getenv("ELEVENLABS_VOICE_ID") or "EXAVITQu4vr4xnSDxMaL"
 
-    # Use raw dict for conversation_config — ElevenLabs SDK accepts a dict and
-    # this is more forgiving than chasing the typed builder across SDK versions.
+    # Mirror of the live working agent config. These exact settings were tuned
+    # against a real Twilio inbound call from a Polish mobile to a Twilio US/PL
+    # number; deviations break the audio bridge.
     conversation_config = {
         "agent": {
             "prompt": {
@@ -66,22 +71,24 @@ def main():
         "tts": {
             "model_id": "eleven_turbo_v2",
             "voice_id": voice_id,
-            # CRITICAL for Twilio: TTS output must be mu-law 8kHz too — Twilio's
-            # Media Streams expect ulaw_8000 in BOTH directions. Default is
-            # pcm_16000 which Twilio cannot decode, and the call drops silently.
             "agent_output_audio_format": "ulaw_8000",
+            "optimize_streaming_latency": 3,
+            "stability": 0.5,
+            "speed": 1.0,
+            "similarity_boost": 0.8,
         },
         "asr": {
             "quality": "high",
-            # CRITICAL for Twilio: Twilio Media Streams send mu-law 8kHz audio.
-            # Default `pcm_16000` results in the agent hearing silence and the
-            # call dropping after a few seconds with no error message.
+            "provider": "scribe_realtime",
             "user_input_audio_format": "ulaw_8000",
         },
         "turn": {
             "turn_timeout": 7.0,
+            "silence_end_call_timeout": -1.0,
             "mode": "turn",
             "turn_eagerness": "normal",
+            "speculative_turn": True,
+            "turn_model": "turn_v2",
         },
     }
 
