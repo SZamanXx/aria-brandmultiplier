@@ -193,7 +193,7 @@ Small Easter egg. I keep a clone of my own voice on ElevenLabs because I use it 
 
 ## A note on time, deliberately
 
-The brief says 60–90 minutes is the framing, longer if I want it. I gave myself **60**, not 90. Started the clock at 20:15 CET. The reason is honest: I wanted to know how this lands now, after I have done a lot of voice-agent work, when I am no longer learning the stack. If I had given myself 90 it would have told me less. Sixty is where the cuts get real.
+The brief says 60–90 minutes is the framing, longer if I want it. I gave myself **60**, not 90. Started the clock at 20:25 CET. The reason is honest: I wanted to know how this lands now, after I have done a lot of voice-agent work, when I am no longer learning the stack. If I had given myself 90 it would have told me less. Sixty is where the cuts get real.
 
 What that 60-minute budget actually paid for, in order:
 
@@ -213,7 +213,7 @@ What I would have done with the other 30 minutes I cut:
 
 I am writing those tradeoffs down here, not in code, on purpose. The brief said "what you choose to cut, and why." This is the why.
 
-**Working app, end-to-end, in exactly 1 hour and 1 minute.** Started 20:15 CET, dialed in for the first successful round-trip (returning-caller recognition with merged profile + Claude-generated opener) at 21:16 CET. One real bug exposed that wouldn't have surfaced without a live phone test — Twilio Media Streams use mu-law 8 kHz audio in BOTH directions, and my agent's `agent_output_audio_format` was sitting at the SDK default `pcm_16000` for the TTS side. The call connected, ElevenLabs accepted the WebSocket, and then nothing happened — the audio frames were the wrong format for telephony. Fixed via API patch (script updated to bake the right defaults at agent creation time). The lesson is one I had run into on a previous voice agent of mine; I just didn't apply it from minute one on the new one.
+**Working app, end-to-end, in exactly 1 hour and 1 minute.** Started 20:25 CET, dialed in for the first successful round-trip (returning-caller recognition with merged profile + Claude-generated opener) at 21:26 CET. One real bug exposed that wouldn't have surfaced without a live phone test — Twilio Media Streams use mu-law 8 kHz audio in BOTH directions, and my agent's `agent_output_audio_format` was sitting at the SDK default `pcm_16000` for the TTS side. The call connected, ElevenLabs accepted the WebSocket, and then nothing happened — the audio frames were the wrong format for telephony. Fixed via API patch (script updated to bake the right defaults at agent creation time). The lesson is one I had run into on a previous voice agent of mine; I just didn't apply it from minute one on the new one.
 
 ## How I used AI tools
 
