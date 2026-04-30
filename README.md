@@ -267,8 +267,8 @@ PYTHONPATH=. python scripts/configure_elevenlabs_webhook.py
 
 ## Submission
 
-- **Live phone number:** `+1-XXX-XXX-XXXX` *(US local Twilio, will be filled in once provisioned and webhook tested)*
-- **Repository:** *(filled in on submission)*
+- **Live phone number:** **+1 (267) 680-8419** (US local Twilio, Philadelphia area code)
+- **Repository:** https://github.com/SZamanXx/aria-brandmultiplier
 - **Author:** Wojciech Szymański — `jatczakwojciech@gmail.com`
 
 ---
